@@ -1,74 +1,125 @@
-// Inspired by Daniel Shiffman, The Coding Train, Coding Challenge # 130.1
 
-let x = [];
-let y = [];
-let fourierX;
-let fourierY; 
+// Daniel Shiffman
+// https://thecodingtrain.com/CodingChallenges/151-ukulele-tuner.html
+// https://youtu.be/F1OkDTUkKFo
+// https://editor.p5js.org/codingtrain/sketches/8io2zvT03
 
-let time = 0;
-let path = [];
+const model_url = 'https://cdn.jsdelivr.net/gh/ml5js/ml5-data-and-models/models/pitch-detection/crepe/';
+let pitch;
+let mic;
+let freq = 0;
+let threshold = 1;
+
+
+let notes = [{
+    note: 'E4',
+    freq: 329.63
+  },
+  {
+    note: 'B3',
+    freq: 246.94
+  },
+  {
+    note: 'G3',
+    freq: 196.00
+  },
+  {
+    note: 'D3',
+    freq: 146.83
+  },
+  {
+    note: 'A2',
+    freq: 110.00
+  },
+  {
+    note: 'E2',
+    freq: 82.41
+  }
+];
 
 function setup() {
-	createCanvas(2500, 2000);
-	for (let i = 0; i<drawing.length; i++){
-		angle = map(i, 0, 100, 0, TWO_PI);
-		x[i] = drawing[i].x;
-		y[i] = drawing[i].y;
-	}
-
-	fourierX = dft(x);
-	fourierY = dft(y);
-  	fourierX.sort((a, b) => b.amp - a.amp);
-  	fourierY.sort((a, b) => b.amp - a.amp);
+  createCanvas(400, 400);
+  audioContext = getAudioContext();
+  mic = new p5.AudioIn();
+  mic.start(listening);
 }
 
-function epiCycles(x, y, rotation, fourier){
-	for (let i = 0; i < fourier.length; i++){
-
-		let prevx = x;
-		let prevy = y;
-
-		let freq = fourier[i].freq;
-		let radius = fourier[i].amp;
-		let phase = fourier[i].phase;
-		x += radius * cos(freq*time + phase + rotation);
-		y += radius * sin(freq*time + phase + rotation);
-
-		stroke(50, 200);
-		noFill();
-		ellipse(prevx, prevy, radius*2);
-		stroke(0);
-		line(prevx, prevy, x, y);
-		}
-	return createVector(x, y);
-
-	}
+function listening() {
+  console.log('listening');
+  pitch = ml5.pitchDetection(
+    model_url,
+    audioContext,
+    mic.stream,
+    modelLoaded
+  );
+}
 
 function draw() {
+  background(0);
+  textAlign(CENTER, CENTER);
+  fill(255);
+  textSize(32);
+  text(freq.toFixed(2), width / 2, height - 150);
 
-	background(255);
 
-	let vx = epiCycles(450, 50, 0, fourierX);
-	let vy = epiCycles(200, 200, HALF_PI, fourierY);
-	let v = createVector(vx.x, vy.y)
-	
-	path.unshift(v);
-	line(vx.x, vx.y, v.x, v.y);
-	line(vy.x, vy.y, v.x, v.y);
+  let closestNote = -1;
+  let recordDiff = Infinity;
+  for (let i = 0; i < notes.length; i++) {
+    let diff = freq - notes[i].freq;
+    if (abs(diff) < abs(recordDiff)) {
+      closestNote = notes[i];
+      recordDiff = diff;
+    }
+  }
 
-	beginShape();
-	noFill();
-	for (let i = 0; i < path.length; i++){
-		stroke(0)
-		vertex(path[i].x, path[i].y);
-	}
-	endShape();
+  textSize(64);
+  text(closestNote.note, width / 2, height - 50);
 
-	const dt = TWO_PI / fourierY.length;
-	time += dt;	
 
-  if (time > TWO_PI + 0.05) {
-    time = 0;
-    path = [];
+  let diff = recordDiff;
+  // let amt = map(diff, -100, 100, 0, 1);
+  // let r = color(255, 0, 0);
+  // let g = color(0, 255, 0);
+  // let col = lerpColor(g, r, amt);
+
+
+  let alpha = map(abs(diff), 0, 100, 255, 0);
+  rectMode(CENTER);
+  fill(255, alpha);
+  stroke(255);
+  strokeWeight(1);
+  if (abs(diff) < threshold) {
+    fill(0, 255, 0);
+  }
+  rect(200, 100, 200, 50);
+
+  stroke(255);
+  strokeWeight(4);
+  line(200, 0, 200, 200);
+
+  noStroke();
+  fill(255, 0, 0);
+  if (abs(diff) < threshold) {
+    fill(0, 255, 0);
+  }
+  rect(200 + diff / 2, 100, 10, 75);
+
+
+}
+
+function modelLoaded() {
+  console.log('model loaded');
+  pitch.getPitch(gotPitch);
+}
+
+function gotPitch(error, frequency) {
+  if (error) {
+    console.error(error);
+  } else {
+    //console.log(frequency);
+    if (frequency) {
+      freq = frequency;
+    }
+    pitch.getPitch(gotPitch);
   }
 }
